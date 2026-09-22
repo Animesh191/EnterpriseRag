@@ -1,73 +1,108 @@
 # Enterprise RAG Intelligence System
 
-A local, role-aware Retrieval-Augmented Generation (RAG) system for searching enterprise documents across HR, Finance, IT, Compliance, and General information silos.
+A local, role-aware Retrieval-Augmented Generation (RAG) system for querying enterprise documents across HR, Finance, IT, Compliance, and General information silos.
 
-The system prevents unauthorized documents from entering the retrieval context, combines semantic and keyword search, and returns answers with source citations.
+The project enforces access control using demo users and roles, searches both semantic embeddings and keyword signals, and returns grounded answers with source citations.
 
-## Run From A Fresh Clone
+## What this project does
 
-Prerequisites:
+- Uses RBAC-aware routing so each user only sees allowed categories
+- Indexes enterprise documents in ChromaDB
+- Combines vector similarity with keyword scoring
+- Queries a local Ollama model for grounded answers
+- Runs from a small interactive CLI or one-shot demo commands
 
-- Windows PowerShell
-- Python 3.10 or newer on `PATH`
-- [Ollama](https://ollama.com/download) installed and on `PATH`
-- Internet access on the first run to install Python packages and download the embedding model
+## Prerequisites
 
-Clone the repository, enter it, and run the bootstrap script:
+- Windows 10/11 with PowerShell
+- Python 3.10 or newer on PATH
+- [Ollama](https://ollama.com/download) installed and available on PATH
+- Internet access for the first setup so Python packages and models can be downloaded
+
+## Installation
+
+From a fresh clone:
 
 ```powershell
 git clone https://github.com/<your-username>/EnterpriseRAG.git
 cd EnterpriseRAG
-powershell -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
-The script creates `RAG-MODEL/.venv`, installs `requirements.txt`, starts Ollama when needed, downloads `qwen2.5:3b`, and launches the interactive CLI. It is safe to run again; packages and indexed documents are reused.
-
-If PowerShell execution policy is already configured for local scripts, this is equivalent:
+Create and activate a virtual environment:
 
 ```powershell
-.\run.ps1
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r .\requirements.txt
 ```
 
-## Demo Commands
+Start Ollama and pull the model used by the app:
 
-Run the predefined eight-query demonstration:
+```powershell
+ollama serve
+ollama pull qwen2.5:3b
+```
+
+> If `ollama` is not recognized, install Ollama and reopen PowerShell so the PATH is refreshed.
+
+## Running the app
+
+Run the project from the repository root so the app resolves the bundled dataset under `./enterprise_data`:
+
+```powershell
+python -m src.enterprise_rag.cli
+```
+
+This opens the interactive menu. Supported commands inside the CLI include:
+
+- `whoami` - show the active user, role, and allowed categories
+- `switch` - change the active demo user
+- `stats` - display vector store and retrieval settings
+- `help` - show available commands
+- `exit` or `quit` - leave the application
+
+## Quick commands
+
+Run the built-in demo sequence:
 
 ```powershell
 .\run.ps1 -Demo
 ```
 
-Run one non-interactive query:
+Run one non-interactive query as a specific user:
 
 ```powershell
 .\run.ps1 -User alice -Query "What was Q2 2025 revenue?"
 ```
 
-The interactive CLI also supports:
+Direct Python invocation without the launcher:
 
-- `whoami` - show the active role and permitted categories
-- `switch` - change the active demo user
-- `stats` - show vector store and retrieval settings
-- `help` - show available commands
-- `exit` or `quit` - leave the application
-
-## Architecture
-
-```text
-Question
-	-> User and role lookup
-	-> RBAC allowed-category check
-	-> Keyword-based department routing
-	-> Routed categories intersected with allowed categories
-	-> ChromaDB semantic search plus keyword scoring
-	-> Top context chunks inserted into a grounded prompt
-	-> Ollama qwen2.5:3b generation
-	-> Answer with citations and relevance scores
+```powershell
+python -m src.enterprise_rag.cli --demo
+python -m src.enterprise_rag.cli --user alice --query "What was Q2 2025 revenue?"
 ```
 
-### Access control
+## Bootstrap script
 
-The demo users are defined in `RAG-MODEL/enterprise_rag.py`:
+The repository includes a convenience launcher at `run.ps1` that handles the setup steps automatically:
+
+- creates `.venv` if missing
+- installs `requirements.txt`
+- starts Ollama if needed
+- downloads the Ollama model
+- runs the app from the correct module entry point
+
+Example:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run.ps1
+powershell -ExecutionPolicy Bypass -File .\run.ps1 -Demo
+```
+
+## Demo access model
+
+The built-in users are defined in `src/enterprise_rag/cli.py`:
 
 | User | Role | Access |
 | --- | --- | --- |
@@ -77,50 +112,45 @@ The demo users are defined in `RAG-MODEL/enterprise_rag.py`:
 | dave | it_engineer | IT, General |
 | eve | compliance_officer | Compliance, HR, Finance, IT, General |
 
-### Retrieval
-
-Documents are split into overlapping word chunks and stored in ChromaDB using the `all-MiniLM-L6-v2` embedding model. Retrieval combines:
-
-```text
-final score = 0.7 * semantic similarity + 0.3 * keyword score
-```
-
-Results below the confidence threshold are removed before generation. The prompt instructs Ollama to answer only from the accessible context and cite claims as `[Source N]`.
-
-## Repository Layout
+## Repository structure
 
 ```text
 EnterpriseRAG/
-|-- run.ps1                         # One-command Windows bootstrap and launcher
-|-- requirements.txt                # Python dependencies
 |-- README.md
-`-- RAG-MODEL/
-		|-- enterprise_rag.py           # Application and CLI entry point
-		|-- enterprise_data/             # Synthetic enterprise source documents
-		`-- chroma_db/                   # Persistent local vector store
+|-- requirements.txt
+|-- run.ps1
+|-- enterprise_data/                  # Source documents used by the app
+|-- data/                             # Local extracted/ingested workspace data
+|-- src/
+|   `-- enterprise_rag/
+|       `-- cli.py                   # Main application and CLI entry point
+|-- chroma_db/                       # Chroma vector database
+|-- docs/
+`-- tests/
 ```
-
-Supported source formats are TXT, CSV, JSON, and PDF. The included data is synthetic and intended for demonstration.
 
 ## Troubleshooting
 
-### `ollama` is not recognized
+### First run is slow
 
-Install Ollama and restart PowerShell so its installation directory is available on `PATH`.
+The first execution downloads Python packages, the sentence-transformer model, and the local Ollama model. Subsequent runs are much faster because they reuse the local caches.
 
-### The first run is slow
+### The app cannot find the data folder
 
-The first run downloads Python packages, the `all-MiniLM-L6-v2` embedding model, and the `qwen2.5:3b` Ollama model. Later runs use the local cache.
+Run commands from the repository root, not from a nested folder. The app is designed to use the top-level `enterprise_data` folder.
 
-### Running the Python file directly
+### Startup fails with a missing module error
 
-Run it from `RAG-MODEL`, because the application uses relative paths:
+Recreate the environment and reinstall dependencies:
 
 ```powershell
-cd RAG-MODEL
-.\.venv\Scripts\python.exe enterprise_rag.py
+Remove-Item -Recurse -Force .\.venv
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r .\requirements.txt
 ```
 
-## Production Considerations
+## Notes
 
-This is a local demonstration prototype. A production version should replace the hardcoded users with SSO or OAuth, store document-level ACL metadata, add audit logging and automated evaluation, and deploy the model and vector store behind authenticated services.
+This is a local demonstration project intended for enterprise-style RAG experiments. It is not a production-grade identity or authorization system.

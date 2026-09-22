@@ -9,7 +9,7 @@ $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $model = "qwen2.5:3b"
 $ollamaUrl = "http://127.0.0.1:11434/api/tags"
 
-Set-Location (Join-Path $projectRoot "RAG-MODEL")
+Set-Location $projectRoot
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     throw "Python 3.10 or newer is required and must be available on PATH."
@@ -19,7 +19,7 @@ if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
     throw "Ollama is required. Install it from https://ollama.com/download and ensure ollama is on PATH."
 }
 
-$venvPython = Join-Path (Get-Location) ".venv\Scripts\python.exe"
+$venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
     python -m venv .venv
 }
@@ -50,9 +50,9 @@ catch {
     }
 }
 
-ollama pull $model
+& ollama pull $model
 
-$arguments = @("enterprise_rag.py")
+$arguments = @("-m", "src.enterprise_rag.cli")
 if ($Demo) {
     $arguments += "--demo"
 }
